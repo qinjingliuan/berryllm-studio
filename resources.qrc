@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file>resources/styles/light_theme.qss</file>
+        <file>resources/styles/dark_theme.qss</file>
+        <file>resources/images/berryllm_icon.png</file>
+        <file>resources/images/arrow_down_dark.png</file>
+        <file>resources/images/arrow_down_light.png</file>
+    </qresource>
+</RCC> 

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="zh_CN">
+<context>
+    <name>MainWindow</name>
+    <message>
+        <source>BerryLLM Studio</source>
+        <translation>BerryLLM 工作室</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>文件</translation>
+    </message>
+    <message>
+        <source>View</source>
+        <translation>视图</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>帮助</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Toggle Theme</source>
+        <translation>切换主题</translation>
+    </message>
+    <message>
+        <source>Light Theme</source>
+        <translation>浅色主题</translation>
+    </message>
+    <message>
+        <source>Dark Theme</source>
+        <translation>深色主题</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation>退出</translation>
+    </message>
+    <message>
+        <source>Save Chat</source>
+        <translation>保存聊天记录</translation>
+    </message>
+    <message>
+        <source>Clear Chat</source>
+        <translation>清除聊天记录</translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation>就绪</translation>
+    </message>
+    <message>
+        <source>Welcome to BerryLLM Studio! Please enter your question.</source>
+        <translation>欢迎使用BerryLLM工作室！请输入您的问题。</translation>
+    </message>
+</context>
+<context>
+    <name>ChatView</name>
+    <message>
+        <source>Send</source>
+        <translation>发送</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>清除</translation>
+    </message>
+    <message>
+        <source>Enter message...</source>
+        <translation>输入消息...</translation>
+    </message>
+    <message>
+        <source>User</source>
+        <translation>用户</translation>
+    </message>
+    <message>
+        <source>AI Assistant</source>
+        <translation>AI助手</translation>
+    </message>
+    <message>
+        <source>Clear Chat</source>
+        <translation>清除聊天</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>General</source>
+        <translation>常规</translation>
+    </message>
+    <message>
+        <source>API</source>
+        <translation>API</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>高级</translation>
+    </message>
+</context>
+</TS> 
