@@ -11,10 +11,10 @@ class LlmService(QObject):
     """LLM服务类,负责与AI提供商的API通信"""
     
     # 信号
-    response_started = Signal()
-    response_chunk = Signal(str)
-    response_finished = Signal()
-    error_occurred = Signal(str)
+    response_started = Signal(str)  # 会话ID
+    response_chunk = Signal(str, str)  # 会话ID, 响应块
+    response_finished = Signal(str)  # 会话ID
+    error_occurred = Signal(str, str)  # 会话ID, 错误信息
     all_requests_finished = Signal()
     connection_test_result = Signal(bool, str)
     
@@ -33,8 +33,11 @@ class LlmService(QObject):
         # 活跃请求计数
         self._active_requests = 0
         
-        # 对话历史
-        self._conversation_history = []
+        # 会话历史
+        self._conversation_histories = {}  # 会话ID -> 对话历史
+        
+        # 当前活跃会话的请求
+        self._active_session_replies = {}  # 会话ID -> QNetworkReply
         
         # 初始化SSL配置
         self._ssl_config = QSslConfiguration.defaultConfiguration()
@@ -43,10 +46,11 @@ class LlmService(QObject):
         # 加载设置
         self._load_settings()
     
-    def send_message(self, message, context=None):
+    def send_message(self, session_id, message, context=None):
         """发送消息到LLM
         
         Args:
+            session_id: 会话ID
             message: 用户消息
             context: 上下文信息,可选
         """
@@ -54,52 +58,70 @@ class LlmService(QObject):
             context = {}
         
         # 取消任何活跃的请求
-        self.cancel_request()
+        self.cancel_request(session_id)
+        
+        # 获取会话信息
+        session_info = self._get_session_info(session_id)
+        if not session_info:
+            self.error_occurred.emit(session_id, "会话不存在")
+            return
         
         # 获取API URL
-        provider_api_url = self.get_provider_api_url(self._current_provider)
+        provider_api_url = self.get_provider_api_url(session_info["provider_id"])
         if not provider_api_url:
-            self.error_occurred.emit("API URL未配置")
+            self.error_occurred.emit(session_id, "API URL未配置")
             return
         
         # 验证URL格式
         if not self._validate_url(provider_api_url):
-            self.error_occurred.emit(f"API URL格式无效: {provider_api_url}")
+            self.error_occurred.emit(session_id, f"API URL格式无效: {provider_api_url}")
             return
         
         # 检查API密钥
         settings = QSettings()
-        api_key = settings.value(f"LLM/{self._current_provider}/ApiKey", "")
+        api_key = settings.value(f"LLM/{session_info['provider_id']}/ApiKey", "")
         if not api_key:
-            self.error_occurred.emit(f"{self._current_provider} API密钥未配置")
+            self.error_occurred.emit(session_id, f"{session_info['provider_id']} API密钥未配置")
             return
         
         # 创建请求
-        request = self._create_request(provider_api_url)
+        request = self._create_request(provider_api_url, session_info["provider_id"], api_key)
         
         # 构建请求体
-        request_body = self._build_request_body(message, context)
+        request_body = self._build_request_body(session_info["provider_id"], session_info["model_id"], message, context)
         
         # 存储对话历史
-        self._store_conversation_history("user", message)
+        self._store_conversation_history(session_id, "user", message)
         
         # 发送请求
         self._active_requests += 1
-        self._current_reply = self._network_manager.post(request, request_body)
+        reply = self._network_manager.post(request, request_body)
+        
+        # 存储会话ID
+        reply.setProperty("session_id", session_id)
+        
+        # 保存到活跃会话请求
+        self._active_session_replies[session_id] = reply
         
         # 连接信号
-        self._current_reply.finished.connect(self._on_network_reply_finished)
-        self._current_reply.readyRead.connect(self._on_network_reply_ready_read)
-        self._current_reply.errorOccurred.connect(self._on_network_reply_error)
+        reply.finished.connect(self._on_network_reply_finished)
+        reply.readyRead.connect(self._on_network_reply_ready_read)
+        reply.errorOccurred.connect(self._on_network_reply_error)
         
         # 发送开始响应信号
-        self.response_started.emit()
+        self.response_started.emit(session_id)
     
-    def cancel_request(self):
-        """取消当前请求"""
-        if self._current_reply and self._current_reply.isRunning():
-            self._current_reply.abort()
-            self._current_reply = None
+    def cancel_request(self, session_id):
+        """取消当前请求
+        
+        Args:
+            session_id: 会话ID
+        """
+        if session_id in self._active_session_replies:
+            reply = self._active_session_replies[session_id]
+            if reply and reply.isRunning():
+                reply.abort()
+            del self._active_session_replies[session_id]
     
     def has_active_requests(self):
         """检查是否有活跃请求"""
@@ -191,9 +213,14 @@ class LlmService(QObject):
         pattern = r'^https?://[\w\-.]+(:\d+)?(/[\w\-.~!$&\'()*+,;=:@/%]*)?$'
         return bool(re.match(pattern, url))
     
-    def clear_conversation_history(self):
-        """清空对话历史"""
-        self._conversation_history = []
+    def clear_conversation_history(self, session_id):
+        """清空对话历史
+        
+        Args:
+            session_id: 会话ID
+        """
+        if session_id in self._conversation_histories:
+            self._conversation_histories[session_id] = []
     
     def _load_settings(self):
         """加载设置"""
@@ -201,118 +228,125 @@ class LlmService(QObject):
         provider = settings.value("LLM/Provider", "openai")
         self._current_provider = provider
     
-    def _create_request(self, url):
+    def _create_request(self, url, provider_id, api_key):
         """创建请求
         
         Args:
             url: API URL
+            provider_id: 提供商ID
+            api_key: API密钥
             
         Returns:
             QNetworkRequest: 网络请求对象
         """
-        request = QNetworkRequest(url)
+        request = QNetworkRequest(QUrl(url))
         request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
         
         # 设置SSL配置
         request.setSslConfiguration(self._ssl_config)
         
-        # 设置API密钥
-        settings = QSettings()
-        api_key = settings.value(f"LLM/{self._current_provider}/ApiKey", "")
-        
-        if self._current_provider == "openai":
+        if provider_id == "openai":
             request.setRawHeader(b"Authorization", f"Bearer {api_key}".encode())
-        elif self._current_provider == "anthropic":
+        elif provider_id == "anthropic":
             request.setRawHeader(b"x-api-key", api_key.encode())
             request.setRawHeader(b"anthropic-version", b"2023-06-01")
-        elif self._current_provider == "deepseek":
+        elif provider_id == "deepseek":
             request.setRawHeader(b"Authorization", f"Bearer {api_key}".encode())
         
         return request
     
-    def _build_request_body(self, message, context):
+    def _build_request_body(self, provider_id, model_id, message, context):
         """构建请求体
         
         Args:
+            provider_id: 提供商ID
+            model_id: 模型ID
             message: 用户消息
             context: 上下文信息
             
         Returns:
-            QByteArray: 请求体数据
+            bytes: 请求体数据
         """
         settings = QSettings()
-        streaming = settings.value("LLM/EnableStreaming", True, bool)
         max_tokens = settings.value("LLM/MaxTokens", 2048, int)
         temperature = settings.value("LLM/Temperature", 0.7, float)
         
-        request_data = {}
-        
-        if self._current_provider == "openai":
-            # 构建OpenAI请求
-            model = settings.value("LLM/OpenAI/Model", "gpt-3.5-turbo")
-            
-            messages = self._get_conversation_history()
-            messages.append({"role": "user", "content": message})
-            
-            request_data = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
+        # 构建请求体
+        if provider_id == "openai":
+            data = {
+                "model": model_id,
+                "messages": [
+                    {"role": "user", "content": message}
+                ],
                 "max_tokens": max_tokens,
-                "stream": streaming
+                "temperature": temperature,
+                "stream": True
             }
-            
-            # 添加上下文
-            if context:
-                for key, value in context.items():
-                    request_data[key] = value
-                
-        elif self._current_provider == "anthropic":
-            # 构建Anthropic请求
-            model = settings.value("LLM/Anthropic/Model", "claude-2")
-            
-            # 构建消息历史
-            messages = []
-            for msg in self._conversation_history:
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
-            
-            request_data = {
-                "model": model,
-                "messages": messages + [{"role": "user", "content": message}],
+        elif provider_id == "anthropic":
+            data = {
+                "model": model_id,
+                "messages": [
+                    {"role": "user", "content": message}
+                ],
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "stream": streaming
+                "stream": True
             }
-            
-        elif self._current_provider == "deepseek":
-            # 构建DeepSeek请求
-            model = settings.value("LLM/DeepSeek/Model", "deepseek-chat")
-            
-            messages = self._get_conversation_history()
-            messages.append({"role": "user", "content": message})
-            
-            request_data = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
+        elif provider_id == "deepseek":
+            data = {
+                "model": model_id,
+                "messages": [
+                    {"role": "user", "content": message}
+                ],
                 "max_tokens": max_tokens,
-                "stream": streaming
+                "temperature": temperature,
+                "stream": True
+            }
+        else:
+            # 默认使用OpenAI格式
+            data = {
+                "model": model_id,
+                "messages": [
+                    {"role": "user", "content": message}
+                ],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "stream": True
             }
         
-        # 转换为JSON
-        return QByteArray(json.dumps(request_data).encode())
+        # 转换为JSON字符串并编码为UTF-8
+        return json.dumps(data).encode("utf-8")
     
-    def _store_conversation_history(self, role, content):
+    def _get_session_info(self, session_id):
+        """获取会话信息
+        
+        Args:
+            session_id: 会话ID
+            
+        Returns:
+            dict: 会话信息
+        """
+        # 从SessionManager获取会话信息
+        parent = self.parent()
+        if parent and hasattr(parent, "_session_manager"):
+            session_manager = parent._session_manager
+            return session_manager.get_session(session_id)
+        return None
+    
+    def _store_conversation_history(self, session_id, role, content):
         """存储对话历史
         
         Args:
-            role: 角色 (user/assistant)
-            content: 消息内容
+            session_id: 会话ID
+            role: 角色(user/assistant)
+            content: 内容
         """
-        self._conversation_history.append({
+        # 初始化会话历史
+        if session_id not in self._conversation_histories:
+            self._conversation_histories[session_id] = []
+        
+        # 添加消息
+        self._conversation_histories[session_id].append({
             "role": role,
             "content": content
         })
@@ -320,190 +354,246 @@ class LlmService(QObject):
         # 限制历史记录长度
         settings = QSettings()
         max_history = settings.value("LLM/MaxHistoryMessages", 10, int)
-        if len(self._conversation_history) > max_history:
-            self._conversation_history = self._conversation_history[-max_history:]
+        
+        if len(self._conversation_histories[session_id]) > max_history * 2:
+            # 保留最新的历史记录
+            self._conversation_histories[session_id] = self._conversation_histories[session_id][-max_history*2:]
     
-    def _get_conversation_history(self):
+    def _get_conversation_history(self, session_id):
         """获取对话历史
         
+        Args:
+            session_id: 会话ID
+            
         Returns:
-            list: 对话历史列表
+            list: 对话历史
         """
-        return self._conversation_history.copy()
+        return self._conversation_histories.get(session_id, [])
     
     @Slot()
     def _on_network_reply_finished(self):
         """网络响应完成处理"""
-        if not self._current_reply:
+        reply = self.sender()
+        if not reply:
             return
         
-        if self._current_reply.error() == QNetworkReply.NoError:
-            # 处理最后的响应数据
-            data = self._current_reply.readAll()
-            if data:
-                self._process_streaming_response(data)
-            
-            # 处理非流式响应
-            settings = QSettings()
-            streaming = settings.value("LLM/EnableStreaming", True, bool)
-            
-            if not streaming:
-                try:
-                    response_json = json.loads(str(self._response_buffer, 'utf-8'))
-                    
-                    if self._current_provider == "openai":
-                        content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
-                    elif self._current_provider == "anthropic":
-                        content = response_json.get("content", [{}])[0].get("text", "")
-                    elif self._current_provider == "deepseek":
-                        content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
-                    else:
-                        content = ""
-                    
-                    if content:
-                        self.response_chunk.emit(content)
-                        self._store_conversation_history("assistant", content)
-                except Exception as e:
-                    self.error_occurred.emit(f"解析响应失败: {str(e)}")
+        # 获取会话ID
+        session_id = reply.property("session_id")
         
         # 减少活跃请求计数
         self._active_requests -= 1
+        
+        # 从活跃会话请求中移除
+        if session_id in self._active_session_replies:
+            del self._active_session_replies[session_id]
+        
+        # 发送完成信号
+        self.response_finished.emit(session_id)
+        
+        # 如果所有请求都完成了,发送信号
         if self._active_requests <= 0:
             self._active_requests = 0
             self.all_requests_finished.emit()
         
-        # 发送响应完成信号
-        self.response_finished.emit()
-        
-        # 清理
-        self._current_reply.deleteLater()
-        self._current_reply = None
-        self._response_buffer.clear()
+        # 释放资源
+        reply.deleteLater()
     
     @Slot()
     def _on_network_reply_ready_read(self):
         """网络响应数据可读处理"""
-        if not self._current_reply:
+        reply = self.sender()
+        if not reply:
             return
+        
+        # 获取会话ID
+        session_id = reply.property("session_id")
         
         # 读取数据
-        data = self._current_reply.readAll()
-        if not data:
-            return
+        data = reply.readAll()
         
         # 处理流式响应
-        self._process_streaming_response(data)
+        self._process_streaming_response(session_id, data)
     
     @Slot(QNetworkReply.NetworkError)
     def _on_network_reply_error(self, error):
         """网络错误处理
         
         Args:
-            error: 错误代码
+            error: 错误码
         """
-        if not self._current_reply:
+        reply = self.sender()
+        if not reply:
             return
         
-        error_msg = self._current_reply.errorString()
-        status_code = self._current_reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        # 获取会话ID
+        session_id = reply.property("session_id")
         
-        # 构建更详细的错误信息
-        if status_code:
-            if status_code == 404:
-                error_detail = f"API端点不存在 (HTTP 404)。请检查API URL是否正确。"
-            elif status_code == 401:
-                error_detail = f"认证失败 (HTTP 401)。请检查API密钥是否正确。"
-            elif status_code == 403:
-                error_detail = f"访问被拒绝 (HTTP 403)。请检查API密钥权限。"
-            elif status_code >= 500:
-                error_detail = f"服务器错误 (HTTP {status_code})。请稍后重试。"
-            else:
-                error_detail = f"HTTP错误 {status_code}"
-            
-            self.error_occurred.emit(f"网络错误: {error_detail} - {error_msg}")
-        else:
-            # 没有状态码的错误，可能是连接问题
-            if "not found" in error_msg.lower():
-                error_detail = f"无法连接到服务器。请检查API URL是否正确，以及网络连接是否正常。"
-                self.error_occurred.emit(f"网络错误: {error_detail}")
-            else:
-                self.error_occurred.emit(f"网络错误: {error_msg}")
+        # 获取错误信息
+        error_string = reply.errorString()
+        
+        # 发送错误信号
+        self.error_occurred.emit(session_id, f"网络错误: {error_string}")
         
         # 减少活跃请求计数
         self._active_requests -= 1
+        
+        # 从活跃会话请求中移除
+        if session_id in self._active_session_replies:
+            del self._active_session_replies[session_id]
+        
+        # 如果所有请求都完成了,发送信号
         if self._active_requests <= 0:
             self._active_requests = 0
             self.all_requests_finished.emit()
     
-    def _process_streaming_response(self, data):
+    def _process_streaming_response(self, session_id, data):
         """处理流式响应
         
         Args:
+            session_id: 会话ID
             data: 响应数据
         """
-        # 添加到缓冲区
+        # 将数据添加到缓冲区
         self._response_buffer.append(data)
         
-        # 检查是否是流式响应
-        settings = QSettings()
-        streaming = settings.value("LLM/EnableStreaming", True, bool)
-        
-        if not streaming:
+        # 获取会话信息
+        session_info = self._get_session_info(session_id)
+        if not session_info:
             return
         
-        try:
-            # 处理数据
-            content = ""
-            data_str = str(data, 'utf-8')
-            
-            # 处理不同提供商的流式响应格式
-            if self._current_provider == "openai":
-                # OpenAI格式: data: {...}\n\ndata: {...}\n\n
-                for line in data_str.split('\n'):
-                    if line.startswith('data: ') and line != 'data: [DONE]':
-                        json_str = line[6:]  # 去掉 'data: '
-                        try:
-                            chunk = json.loads(json_str)
-                            delta = chunk.get('choices', [{}])[0].get('delta', {})
-                            if 'content' in delta:
-                                content += delta['content']
-                        except:
-                            pass
-            
-            elif self._current_provider == "anthropic":
-                # Anthropic格式: event: content_block_delta\ndata: {...}\n\n
-                for line in data_str.split('\n'):
-                    if line.startswith('data: '):
-                        json_str = line[6:]  # 去掉 'data: '
-                        try:
-                            chunk = json.loads(json_str)
-                            delta = chunk.get('delta', {})
-                            if 'text' in delta:
-                                content += delta['text']
-                        except:
-                            pass
-            
-            elif self._current_provider == "deepseek":
-                # DeepSeek格式: data: {...}\n\ndata: {...}\n\n
-                for line in data_str.split('\n'):
-                    if line.startswith('data: ') and line != 'data: [DONE]':
-                        json_str = line[6:]  # 去掉 'data: '
-                        try:
-                            chunk = json.loads(json_str)
-                            delta = chunk.get('choices', [{}])[0].get('delta', {})
-                            if 'content' in delta:
-                                content += delta['content']
-                        except:
-                            pass
-            
-            # 发送内容块
-            if content:
-                self.response_chunk.emit(content)
-                # 不要在这里存储对话历史,因为流式响应会分多次接收
-                # 最终的完整响应会在响应结束时存储
+        provider_id = session_info["provider_id"]
         
-        except Exception as e:
-            self.error_occurred.emit(f"处理流式响应失败: {str(e)}")
+        # 处理不同提供商的流式响应
+        if provider_id == "openai":
+            # 处理OpenAI流式响应
+            buffer_str = self._response_buffer.data().decode("utf-8", errors="ignore")
+            
+            # 查找完整的数据行
+            lines = buffer_str.split("\n")
+            processed_lines = 0
+            
+            for line in lines:
+                line = line.strip()
+                if not line or line == "data: [DONE]":
+                    processed_lines += 1
+                    continue
+                
+                if line.startswith("data: "):
+                    try:
+                        # 解析JSON数据
+                        json_str = line[6:]  # 去除"data: "前缀
+                        data = json.loads(json_str)
+                        
+                        # 提取内容
+                        if "choices" in data and len(data["choices"]) > 0:
+                            choice = data["choices"][0]
+                            if "delta" in choice and "content" in choice["delta"]:
+                                content = choice["delta"]["content"]
+                                
+                                # 发送内容块
+                                self.response_chunk.emit(session_id, content)
+                                
+                                # 存储助手回复
+                                self._store_conversation_history(session_id, "assistant", content)
+                        
+                        processed_lines += 1
+                    except json.JSONDecodeError:
+                        # 不完整的JSON,等待更多数据
+                        break
+                else:
+                    processed_lines += 1
+            
+            # 移除已处理的行
+            if processed_lines > 0:
+                remaining = "\n".join(lines[processed_lines:])
+                self._response_buffer = QByteArray(remaining.encode("utf-8"))
+        
+        elif provider_id == "anthropic":
+            # 处理Anthropic流式响应
+            buffer_str = self._response_buffer.data().decode("utf-8", errors="ignore")
+            
+            # 查找完整的数据行
+            lines = buffer_str.split("\n")
+            processed_lines = 0
+            
+            for line in lines:
+                line = line.strip()
+                if not line or line == "data: [DONE]":
+                    processed_lines += 1
+                    continue
+                
+                if line.startswith("data: "):
+                    try:
+                        # 解析JSON数据
+                        json_str = line[6:]  # 去除"data: "前缀
+                        data = json.loads(json_str)
+                        
+                        # 提取内容
+                        if "type" in data and data["type"] == "content_block_delta":
+                            if "delta" in data and "text" in data["delta"]:
+                                content = data["delta"]["text"]
+                                
+                                # 发送内容块
+                                self.response_chunk.emit(session_id, content)
+                                
+                                # 存储助手回复
+                                self._store_conversation_history(session_id, "assistant", content)
+                        
+                        processed_lines += 1
+                    except json.JSONDecodeError:
+                        # 不完整的JSON,等待更多数据
+                        break
+                else:
+                    processed_lines += 1
+            
+            # 移除已处理的行
+            if processed_lines > 0:
+                remaining = "\n".join(lines[processed_lines:])
+                self._response_buffer = QByteArray(remaining.encode("utf-8"))
+        
+        else:
+            # 默认处理方式(类似OpenAI)
+            buffer_str = self._response_buffer.data().decode("utf-8", errors="ignore")
+            
+            # 查找完整的数据行
+            lines = buffer_str.split("\n")
+            processed_lines = 0
+            
+            for line in lines:
+                line = line.strip()
+                if not line or line == "data: [DONE]":
+                    processed_lines += 1
+                    continue
+                
+                if line.startswith("data: "):
+                    try:
+                        # 解析JSON数据
+                        json_str = line[6:]  # 去除"data: "前缀
+                        data = json.loads(json_str)
+                        
+                        # 提取内容(通用格式)
+                        if "choices" in data and len(data["choices"]) > 0:
+                            choice = data["choices"][0]
+                            if "delta" in choice and "content" in choice["delta"]:
+                                content = choice["delta"]["content"]
+                                
+                                # 发送内容块
+                                self.response_chunk.emit(session_id, content)
+                                
+                                # 存储助手回复
+                                self._store_conversation_history(session_id, "assistant", content)
+                        
+                        processed_lines += 1
+                    except json.JSONDecodeError:
+                        # 不完整的JSON,等待更多数据
+                        break
+                else:
+                    processed_lines += 1
+            
+            # 移除已处理的行
+            if processed_lines > 0:
+                remaining = "\n".join(lines[processed_lines:])
+                self._response_buffer = QByteArray(remaining.encode("utf-8"))
     
     @Slot()
     def _on_connection_test_finished(self, reply, provider_id):
@@ -513,16 +603,11 @@ class LlmService(QObject):
             reply: 网络响应
             provider_id: 提供商ID
         """
-        error = reply.error()
-        
-        if error == QNetworkReply.NoError:
-            self.connection_test_result.emit(True, f"成功连接到{provider_id} API")
+        # 检查响应状态
+        if reply.error() == QNetworkReply.NoError:
+            self.connection_test_result.emit(True, f"{provider_id} API连接成功")
         else:
-            error_msg = reply.errorString()
-            status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
-            if status_code:
-                self.connection_test_result.emit(False, f"连接失败: HTTP {status_code} - {error_msg}")
-            else:
-                self.connection_test_result.emit(False, f"连接失败: {error_msg}")
+            self.connection_test_result.emit(False, f"{provider_id} API连接失败: {reply.errorString()}")
         
+        # 释放资源
         reply.deleteLater() 

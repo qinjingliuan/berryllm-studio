@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from PySide6.QtWidgets import (QWidget, QTextEdit, QLineEdit, QPushButton,
-                              QVBoxLayout, QHBoxLayout, QMenu, QScrollBar)
+                              QVBoxLayout, QHBoxLayout, QMenu, QScrollBar, QMessageBox)
 from PySide6.QtCore import Qt, Signal, Slot, QDateTime
 from PySide6.QtGui import QAction, QTextCursor
 
@@ -11,13 +11,19 @@ class ChatView(QWidget):
     """聊天视图组件,用于显示用户和AI助手的对话"""
     
     # 信号
-    user_message_sent = Signal(str)
+    user_message_sent = Signal(str, str)  # 会话ID, 用户消息
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, session_id=None):
         """初始化聊天视图"""
         super().__init__(parent)
         self._is_streaming = False
+        self._session_id = session_id
         self._setup_ui()
+        self._connect_signals()
+    
+    def set_session_id(self, session_id):
+        """设置会话ID"""
+        self._session_id = session_id
     
     def append_user_message(self, message):
         """添加用户消息到聊天窗口"""
@@ -56,18 +62,67 @@ class ChatView(QWidget):
         self._chat_display.clear()
         self._is_streaming = False
     
+    def save_chat(self, file_path):
+        """保存聊天记录
+        
+        Args:
+            file_path: 文件路径
+        """
+        try:
+            if file_path.endswith(".html"):
+                # 保存为HTML
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(self._chat_display.toHtml())
+            else:
+                # 保存为纯文本
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(self._chat_display.toPlainText())
+            
+            # 显示成功消息
+            QMessageBox.information(
+                self,
+                self.tr("成功"),
+                self.tr("聊天记录已保存")
+            )
+        
+        except Exception as e:
+            # 显示错误消息
+            QMessageBox.critical(
+                self,
+                self.tr("错误"),
+                self.tr("保存聊天记录失败: {}").format(str(e))
+            )
+    
+    def _connect_signals(self):
+        """连接信号和槽"""
+        # 获取LLM服务
+        main_window = self.parent()
+        if main_window and hasattr(main_window, "_llm_service"):
+            llm_service = main_window._llm_service
+            
+            # 连接LLM服务信号
+            llm_service.response_started.connect(self._on_response_started)
+            llm_service.response_chunk.connect(self._on_response_chunk)
+            llm_service.response_finished.connect(self._on_response_finished)
+            llm_service.error_occurred.connect(self._on_error_occurred)
+    
     @Slot()
     def _on_send_button_clicked(self):
         """发送按钮点击处理"""
         message = self._input_field.text().strip()
-        if not message:
+        if not message or not self._session_id:
             return
         
         # 添加用户消息到聊天窗口
         self.append_user_message(message)
         
         # 发送消息信号
-        self.user_message_sent.emit(message)
+        self.user_message_sent.emit(self._session_id, message)
+        
+        # 发送消息到LLM服务
+        main_window = self.parent()
+        if main_window and hasattr(main_window, "_llm_service"):
+            main_window._llm_service.send_message(self._session_id, message)
         
         # 清空输入框
         self._input_field.clear()
@@ -80,7 +135,64 @@ class ChatView(QWidget):
     @Slot()
     def _on_clear_button_clicked(self):
         """清除按钮点击处理"""
-        self.clear_chat()
+        # 创建确认对话框
+        reply = QMessageBox.question(
+            self,
+            self.tr("确认"),
+            self.tr("确定要清除所有聊天记录吗?"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.clear_chat()
+            
+            # 清除LLM服务中的对话历史
+            main_window = self.parent()
+            if main_window and hasattr(main_window, "_llm_service") and self._session_id:
+                main_window._llm_service.clear_conversation_history(self._session_id)
+    
+    @Slot(str)
+    def _on_response_started(self, session_id):
+        """响应开始处理"""
+        if session_id != self._session_id:
+            return
+        
+        # 禁用发送按钮
+        self._send_button.setEnabled(False)
+    
+    @Slot(str, str)
+    def _on_response_chunk(self, session_id, content):
+        """响应块处理"""
+        if session_id != self._session_id:
+            return
+        
+        # 添加流式内容
+        self.append_streaming_content(content)
+    
+    @Slot(str)
+    def _on_response_finished(self, session_id):
+        """响应完成处理"""
+        if session_id != self._session_id:
+            return
+        
+        # 启用发送按钮
+        self._send_button.setEnabled(True)
+        
+        # 重置流式状态
+        self._is_streaming = False
+    
+    @Slot(str, str)
+    def _on_error_occurred(self, session_id, error_message):
+        """错误处理"""
+        if session_id != self._session_id:
+            return
+        
+        # 显示错误消息
+        self.append_assistant_message(f"错误: {error_message}")
+        
+        # 启用发送按钮
+        self._send_button.setEnabled(True)
     
     def _setup_ui(self):
         """设置用户界面"""

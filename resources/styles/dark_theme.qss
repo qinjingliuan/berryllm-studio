@@ -7,7 +7,8 @@
 QWidget {
     background-color: #2d2d2d;
     color: #e0e0e0;
-    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 12px;
 }
 
 /* 主窗口 */
@@ -83,20 +84,19 @@ QPushButton:disabled {
 
 /* 文本编辑框 */
 QTextEdit {
-    background-color: #353535;
-    border: 1px solid #404040;
-    border-radius: 4px;
-    padding: 5px;
+    background-color: #333333;
     color: #e0e0e0;
+    border: 1px solid #444444;
+    border-radius: 4px;
 }
 
 /* 行编辑框 */
 QLineEdit {
-    background-color: #353535;
-    border: 1px solid #404040;
-    border-radius: 4px;
-    padding: 5px;
+    background-color: #333333;
     color: #e0e0e0;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 4px;
 }
 
 QLineEdit:focus {
@@ -285,8 +285,9 @@ QSpinBox::down-button, QDoubleSpinBox::down-button {
 
 /* 侧边菜单样式 */
 #side_menu {
-    background-color: #252525;
-    border-right: 1px solid #404040;
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-right: 1px solid #3d3d3d;
 }
 
 #side_menu_title {
@@ -297,8 +298,7 @@ QSpinBox::down-button, QDoubleSpinBox::down-button {
 }
 
 #menu_separator {
-    background-color: #404040;
-    margin: 5px 0px;
+    background-color: #3d3d3d;
 }
 
 #menu_section_title {
@@ -339,4 +339,73 @@ QSpinBox::down-button, QDoubleSpinBox::down-button {
 
 #theme_button:pressed {
     background-color: #404040;
+}
+
+/* 圆形图标按钮 */
+#round_icon_button {
+    background-color: #1e1e1e;  /* 与side_menu背景色相同 */
+    color: #ffffff;
+    border: none;
+    border-radius: 18px; /* 圆形边框 */
+    padding: 2px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    max-width: 36px;
+    max-height: 36px;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+}
+
+#round_icon_button:hover {
+    background-color: #3d3d3d;
+    border: 1px solid #4d4d4d;
+    opacity: 1.0;
+}
+
+#round_icon_button:pressed {
+    background-color: #4d4d4d;
+    border: 1px solid #5d5d5d;
+}
+
+#round_icon_button.active {
+    background-color: #2d2d2d;
+    border: 0.5px solid #3d3d3d;
+}
+
+#round_icon_button.active .icon {
+    color: var(--color-primary);
+}
+
+/* 侧边菜单样式 */
+#session_menu {
+    background-color: #2d2d2d;
+    color: #ffffff;
+    border-right: 1px solid #3d3d3d;
+}
+
+#session_title {
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 14px;
+    padding: 5px;
+}
+
+#icon_button {
+    background-color: #2d2d2d;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
+    margin: 2px;
+}
+
+#icon_button:hover {
+    background-color: #3d3d3d;
+}
+
+#icon_button:pressed {
+    background-color: #4d4d4d;
 } 

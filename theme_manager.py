@@ -62,6 +62,7 @@ class ThemeManager(QObject):
         
         if style_sheet:
             print(f"正在应用主题: {theme.name}, 样式表长度: {len(style_sheet)}")
+            
             QApplication.instance().setStyleSheet(style_sheet)
             self._current_theme = theme
             
@@ -78,13 +79,21 @@ class ThemeManager(QObject):
         """获取当前主题"""
         return self._current_theme
     
+    def set_theme(self, theme):
+        """设置主题
+        
+        Args:
+            theme: 要设置的主题
+        """
+        if theme != self._current_theme:
+            print(f"设置主题: {theme.name}")
+            self.apply_theme(theme)
+    
     @Slot()
     def toggle_theme(self):
         """切换主题"""
         if self._current_theme == Theme.LIGHT:
             new_theme = Theme.DARK
-        elif self._current_theme == Theme.DARK:
-            new_theme = Theme.AUTO
         else:
             new_theme = Theme.LIGHT
         print(f"切换主题: {self._current_theme.name} -> {new_theme.name}")

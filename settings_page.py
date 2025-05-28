@@ -39,6 +39,7 @@ class SettingsDialog(QDialog):
         self._create_general_tab()
         self._create_api_tab()
         self._create_advanced_tab()
+        self._create_about_tab()
         
         # 创建按钮
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -65,14 +66,9 @@ class SettingsDialog(QDialog):
         self._language_combo.addItem(self.tr("English"), "en_US")
         ui_layout.addRow(self.tr("语言:"), self._language_combo)
         
-        # 主题选择
-        self._theme_combo = QComboBox()
-        self._theme_combo.addItem(self.tr("浅色"), 0)
-        self._theme_combo.addItem(self.tr("深色"), 1)
-        ui_layout.addRow(self.tr("主题:"), self._theme_combo)
-        
         # 添加到布局
         layout.addWidget(ui_group)
+        layout.addStretch()
         
         # 添加标签页
         self._tab_widget.addTab(tab, self.tr("常规"))
@@ -188,6 +184,28 @@ class SettingsDialog(QDialog):
         # 添加标签页
         self._tab_widget.addTab(tab, self.tr("高级"))
     
+    def _create_about_tab(self):
+        """创建关于标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 应用信息
+        about_label = QLabel(self.tr(
+            "<h3>BerryLLM Studio</h3>"
+            "<p>版本: 1.0.0</p>"
+            "<p>一个简单易用的大语言模型聊天应用</p>"
+            "<p>支持多种LLM提供商</p>"
+        ))
+        about_label.setAlignment(Qt.AlignCenter)
+        about_label.setTextFormat(Qt.RichText)
+        
+        # 添加到布局
+        layout.addWidget(about_label)
+        layout.addStretch()
+        
+        # 添加标签页
+        self._tab_widget.addTab(tab, self.tr("关于"))
+    
     def _load_settings(self):
         """加载设置"""
         settings = QSettings()
@@ -197,9 +215,6 @@ class SettingsDialog(QDialog):
         index = self._language_combo.findData(language)
         if index >= 0:
             self._language_combo.setCurrentIndex(index)
-        
-        theme = settings.value("UI/Theme", 0, int)
-        self._theme_combo.setCurrentIndex(theme)
         
         # 加载API设置
         provider = settings.value("LLM/Provider", "openai")
@@ -247,7 +262,6 @@ class SettingsDialog(QDialog):
         
         # 保存常规设置
         settings.setValue("UI/Language", self._language_combo.currentData())
-        settings.setValue("UI/Theme", self._theme_combo.currentIndex())
         
         # 保存API设置
         settings.setValue("LLM/Provider", self._provider_combo.currentData())
