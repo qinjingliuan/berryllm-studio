@@ -129,7 +129,7 @@ class SessionManager(QObject):
         add_button = QPushButton("", widget)
         add_button.setObjectName("icon_button")
         add_button.setToolTip(self.tr("添加会话"))
-        add_button.setIcon(QIcon("resources/images/add.png"))
+        add_button.setIcon(QIcon(":/resources/images/add.png"))
         add_button.setIconSize(QSize(20, 20))
         add_button.clicked.connect(self._on_add_session)
         button_layout.addWidget(add_button)

@@ -101,3 +101,6 @@ venv.bak/
 .vscode/
 *.swp
 *.swo 
+._create_mac_icon.sh
+._run.sh
+resources/images/._AI_dark.png

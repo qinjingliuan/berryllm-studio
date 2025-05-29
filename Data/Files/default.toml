@@ -1,0 +1,19 @@
+[general]
+language = "zh_CN"
+auto_start = false
+check_updates = true
+
+[display]
+theme = "light"
+font_size = 12
+show_toolbar = true
+
+[model]
+default_model = "DeepSeek-R1"
+default_provider = "硅基流动"
+
+[network]
+enable_search = true
+search_engine = "Google"
+proxy_enabled = false
+proxy_url = ""

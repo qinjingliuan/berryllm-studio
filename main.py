@@ -4,7 +4,7 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTranslator, QLocale, QLibraryInfo
+from PySide6.QtCore import QTranslator, QLocale, QLibraryInfo, QFile, Qt
 from PySide6.QtGui import QIcon
 
 # 导入资源文件
@@ -17,6 +17,7 @@ except ImportError as e:
 
 from main_window import MainWindow
 from theme_manager import ThemeManager
+from config_manager import ConfigManager
 
 
 def main():
@@ -28,6 +29,61 @@ def main():
     app.setOrganizationName("BerryLLM")
     app.setApplicationVersion("1.0.0")
     
+    # 禁用使用系统应用程序菜单
+    app.setAttribute(Qt.AA_DontUseNativeMenuBar, True)
+    
+    # 设置应用程序图标
+    # Windows平台需要特殊处理
+    if sys.platform.startswith('win'):
+        # 首先尝试从资源文件加载
+        resource_icon_path = ":/resources/images/berryllm_icon.png"
+        file_icon_path = "resources/images/berryllm_icon.png"
+        
+        # 在Windows上优先使用.ico格式
+        win_ico_path = "resources/images/berryllm_icon.ico"
+        if os.path.exists(win_ico_path):
+            app.setWindowIcon(QIcon(win_ico_path))
+            print(f"Windows: 从文件系统加载.ico图标")
+        elif QFile.exists(resource_icon_path):
+            app.setWindowIcon(QIcon(resource_icon_path))
+            print(f"Windows: 从资源文件加载图标")
+        elif os.path.exists(file_icon_path):
+            app.setWindowIcon(QIcon(file_icon_path))
+            print(f"Windows: 从文件系统加载图标")
+        
+        # 设置进程ID，使Windows正确识别图标
+        try:
+            import ctypes
+            app_id = "BerryLLM.Studio.App.1.0"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+            print(f"已设置Windows应用程序ID: {app_id}")
+        except:
+            print("无法设置Windows应用程序ID")
+    else:
+        # 非Windows平台的处理方式
+        resource_icon_path = ":/resources/images/berryllm_icon.png"
+        file_icon_path = "resources/images/berryllm_icon.png"
+        
+        icon_set = False
+        
+        # 尝试从资源文件加载
+        try:
+            if QFile.exists(resource_icon_path):
+                app.setWindowIcon(QIcon(resource_icon_path))
+                print(f"从资源文件加载图标")
+                icon_set = True
+        except:
+            pass
+        
+        # 如果资源文件加载失败，从文件系统加载
+        if not icon_set and os.path.exists(file_icon_path):
+            app.setWindowIcon(QIcon(file_icon_path))
+            print(f"从文件系统加载图标")
+    
+    # 初始化配置管理器
+    config_manager = ConfigManager.instance()
+    print("配置管理器初始化完成")
+    
     # 初始化主题管理器
     ThemeManager.instance()
     
@@ -35,9 +91,8 @@ def main():
     qt_translator = QTranslator()
     app_translator = QTranslator()
     
-    # 获取系统语言 - 强制使用中文
-    # locale = QLocale.system().name()
-    locale = "zh_CN"  # 强制使用中文
+    # 获取系统语言 - 使用配置中的语言设置
+    locale = config_manager.get("general", "language", "zh_CN")
     print(f"使用语言: {locale}")
     
     # 加载Qt自带的翻译

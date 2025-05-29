@@ -4,7 +4,16 @@
         <file>resources/styles/light_theme.qss</file>
         <file>resources/styles/dark_theme.qss</file>
         <file>resources/images/berryllm_icon.png</file>
-        <file>resources/images/arrow_down_dark.png</file>
-        <file>resources/images/arrow_down_light.png</file>
+        <file>resources/images/berryllm_icon.ico</file>
+        <file>resources/images/add.png</file>
+        <file>resources/images/clear.png</file>
+        <file>resources/images/info.png</file>
+        <file>resources/images/save.png</file>
+        <file>resources/images/moon.png</file>
+        <file>resources/images/sun.png</file>
+        <file>resources/images/settings_dark.png</file>
+        <file>resources/images/settings_light.png</file>
+        <file>resources/images/AI_dark.png</file>
+        <file>resources/images/AI_light.png</file>
     </qresource>
 </RCC> 

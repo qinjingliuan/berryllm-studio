@@ -408,4 +408,103 @@ QSpinBox::down-button, QDoubleSpinBox::down-button {
 
 #icon_button:pressed {
     background-color: #4d4d4d;
+}
+
+/* 设置对话框样式 */
+QDialog#SettingsDialog {
+    background-color: #2d2d2d;
+}
+
+/* 左侧设置菜单 */
+#settings_left_menu {
+    background-color: #252525;
+    border-right: 1px solid #404040;
+}
+
+#settings_menu_list {
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+}
+
+#settings_menu_list::item {
+    padding: 12px 20px;
+    border-radius: 0px;
+}
+
+#settings_menu_list::item:selected {
+    background-color: #3a3a3a;
+    color: #5294e2;
+    font-weight: bold;
+}
+
+#settings_menu_list::item:hover:!selected {
+    background-color: #303030;
+}
+
+/* 内容区域 */
+#settings_content {
+    background-color: #2d2d2d;
+}
+
+#settings_title_bar {
+    background-color: #2d2d2d;
+    border-bottom: 1px solid #404040;
+}
+
+#settings_title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #e0e0e0;
+}
+
+#settings_page {
+    background-color: transparent;
+}
+
+/* 模型平台列表 */
+#model_search_box {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+#platform_item {
+    background-color: #333333;
+    border-radius: 6px;
+    margin: 2px 0px;
+}
+
+#platform_item:hover {
+    background-color: #3a3a3a;
+}
+
+#platform_name {
+    font-size: 14px;
+    padding: 6px;
+}
+
+#add_platform_button {
+    background-color: #5294e2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 0;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+#add_platform_button:hover {
+    background-color: #60a0f0;
+}
+
+#danger_button {
+    background-color: #c75050;
+    color: white;
+    border: none;
+}
+
+#danger_button:hover {
+    background-color: #d56060;
 } 

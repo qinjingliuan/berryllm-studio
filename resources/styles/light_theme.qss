@@ -380,4 +380,106 @@ QDialog {
 
 #icon_button:pressed {
     background-color: #d0d0d0;
+}
+
+/* 设置对话框样式 */
+QDialog#SettingsDialog {
+    background-color: #f5f5f5;
+}
+
+/* 左侧设置菜单 */
+#settings_left_menu {
+    background-color: #e8e8e8;
+    border-right: 1px solid #d0d0d0;
+}
+
+#settings_menu_list {
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+}
+
+#settings_menu_list::item {
+    padding: 12px 20px;
+    border-radius: 0px;
+    color: #404040;
+}
+
+#settings_menu_list::item:selected {
+    background-color: #d5e5ff;
+    color: #0066cc;
+    font-weight: bold;
+}
+
+#settings_menu_list::item:hover:!selected {
+    background-color: #f0f0f0;
+}
+
+/* 内容区域 */
+#settings_content {
+    background-color: #f5f5f5;
+}
+
+#settings_title_bar {
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #d0d0d0;
+}
+
+#settings_title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #303030;
+}
+
+#settings_page {
+    background-color: transparent;
+}
+
+/* 模型平台列表 */
+#model_search_box {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background-color: #ffffff;
+}
+
+#platform_item {
+    background-color: #ffffff;
+    border-radius: 6px;
+    margin: 2px 0px;
+    border: 1px solid #e0e0e0;
+}
+
+#platform_item:hover {
+    background-color: #f0f0f0;
+}
+
+#platform_name {
+    font-size: 14px;
+    padding: 6px;
+}
+
+#add_platform_button {
+    background-color: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 0;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+#add_platform_button:hover {
+    background-color: #0077dd;
+}
+
+#danger_button {
+    background-color: #cc4040;
+    color: white;
+    border: none;
+}
+
+#danger_button:hover {
+    background-color: #dd5050;
 } 
