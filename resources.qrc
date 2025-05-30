@@ -15,5 +15,7 @@
         <file>resources/images/settings_light.png</file>
         <file>resources/images/AI_dark.png</file>
         <file>resources/images/AI_light.png</file>
+        <file>resources/images/eye.png</file>
+        <file>resources/images/eye_off.png</file>
     </qresource>
 </RCC> 
